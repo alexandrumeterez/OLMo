@@ -1008,6 +1008,28 @@ class Trainer:
         else:
             return False
 
+    def should_eval_this_step(self) -> bool:
+        assert self.cfg.eval_interval is not None or self.cfg.eval_count_log_scale is not None
+        if self.cfg.eval_interval is not None:
+            return self.global_step % self.cfg.eval_interval == 0
+        else:
+            assert type(self.cfg.max_duration) == int
+            logspace = np.logspace(-2.1, 0, self.cfg.eval_count_log_scale) * self.cfg.max_duration
+            log_steps = [int(n / 100) * 100 for n in logspace]
+            return self.global_step in log_steps
+
+
+    def should_save_unsharded_this_step(self) -> bool:
+        if self.cfg.save_interval_unsharded is not None:
+            return self.global_step % self.cfg.save_interval_unsharded == 0
+        if self.cfg.save_count_log_scale_unsharded is not None:
+            assert type(self.cfg.max_duration) == int
+            logspace = np.logspace(-2.1, 0, self.cfg.save_count_log_scale_unsharded) * self.cfg.max_duration
+            log_steps = [int(n / 100) * 100 for n in logspace]
+            return self.global_step in log_steps
+        else:
+            return False
+
     def eval(self) -> Dict[str, Any]:
         # Zero gradients and set model to 'eval' mode.
         self.optim.zero_grad(set_to_none=True)
@@ -1297,8 +1319,7 @@ class Trainer:
                     # This code snippet should always execute when running DDP.
                     if (
                         save_checkpoints
-                        and self.cfg.save_interval_unsharded is not None
-                        and self.global_step % self.cfg.save_interval_unsharded == 0
+                        and self.should_save_unsharded_this_step()
                         and self.cfg.save_num_unsharded_checkpoints_to_keep != 0
                     ):
                         log.info("Saving unsharded checkpoint...")
@@ -1309,9 +1330,7 @@ class Trainer:
                         speed_monitor.reset()
 
                     # Maybe run evaluations.
-                    if not cancel_initiated and (
-                        self.global_step % self.cfg.eval_interval == 0 or self.global_step >= stop_at
-                    ):
+                    if not cancel_initiated and self.should_eval_this_step():
                         eval_metrics = self.eval()
 
                         # Log metrics to W&B.

@@ -136,7 +136,17 @@ class BaseConfig:
         cls._register_resolvers(validate_paths=validate_paths)
         schema = om.structured(cls)
         try:
-            raw = om.load(str(path))
+            # Allow for multiple configs joined buy + symbol
+            if "+" in str(path):
+                paths = str(path).split("+")
+                raw = None
+                for path in paths:
+                    if raw is None:
+                        raw = om.load(path)
+                    else:
+                        raw = om.merge(raw, om.load(path))
+            else:
+                raw = om.load(str(path))
             if key is not None:
                 raw = raw[key]  # type: ignore
             raw = cls.update_legacy_settings(raw)
@@ -506,8 +516,15 @@ class OptimizerConfig(BaseConfig):
     name: OptimizerType = OptimizerType.lionw
     learning_rate: float = 1.0e-4
     weight_decay: float = 0.01
-    betas: Tuple[float, float] = (0.9, 0.95)
+    # betas: Tuple[float, float] = (0.9, 0.95)
     eps: float = 1e-5
+
+    beta_0: float = 0.9
+    beta_1: float = 0.95
+
+    tie_betas: bool = False
+    decouple_weight_decay: bool = False  # If true, wd is divided by lr
+    batch_acc: int = 2
 
     no_decay_norm_and_bias: Optional[bool] = None
     """
@@ -534,8 +551,8 @@ class OptimizerConfig(BaseConfig):
     of the update with AdamW.
     """
 
-    def __post_init__(self):
-        self.betas = tuple(self.betas)  # type: ignore[assignment]
+    # def __post_init__(self):
+    #     self.betas = tuple(self.beta_0, self.beta_1)  # type: ignore[assignment]
 
     @classmethod
     def update_legacy_settings(cls, config: D) -> D:
@@ -573,6 +590,7 @@ class SchedulerConfig(BaseConfig):
     t_warmup: Union[int, float] = 100
     t_max: Optional[Union[int, float]] = None
     alpha_f: float = 0.1
+    alpha_0: float = 0.1
 
     grad_clip_warmup_steps: Optional[Union[int, float]] = None
     """
@@ -960,6 +978,11 @@ class TrainConfig(BaseConfig):
     Used to seed all initial RNG states.
     """
 
+    requeue: bool = False
+    """
+    If ``True``, restart the job when it gets requeued.
+    """
+
     epoch: Optional[int] = None
     """
     Increment this when starting a new epoch.
@@ -1008,7 +1031,7 @@ class TrainConfig(BaseConfig):
     Evaluation configurations.
     """
 
-    eval_interval: int = 1000
+    eval_interval: Optional[int] = 1000
     """
     How often (in terms of batches) to run evaluations.
     """
@@ -1037,6 +1060,8 @@ class TrainConfig(BaseConfig):
     """
     How often (in terms of steps) to save sharded training state checkpoints.
     """
+    save_count_log_scale_unsharded: Optional[int] = None
+    eval_count_log_scale: Optional[int] = None
 
     save_interval_unsharded: Optional[int] = None
     """

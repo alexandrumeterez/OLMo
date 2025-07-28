@@ -684,23 +684,22 @@ class Scheduler(metaclass=ABCMeta):
     ) -> Optional[float]:
         return self._get_max_grad_norm_coeff(initial_max_grad_norm_ratio, step, max_steps)
 
-    def _linear_warmup(self, initial_lr: float, step: int, warmup_steps: int = 2000) -> float:
-        warmup_min_lr = self.warmup_min_lr if self.warmup_min_lr is not None else initial_lr * 0.10
-        assert 0 <= warmup_min_lr < initial_lr
-        return warmup_min_lr + (initial_lr - warmup_min_lr) * min(step, warmup_steps) / warmup_steps
+    def _linear_warmup(self, initial_lr: float, step: int, warmup_steps: int = 2000, alpha=0.1) -> float:
+        return initial_lr * (alpha + (1.0 - alpha) * min(step, warmup_steps) / warmup_steps)
 
 
 @dataclass
 class CosWithWarmup(Scheduler):
     warmup_steps: int
     alpha_f: float = 0.1
+    alpha_0: float = 0.1
     t_max: Optional[int] = None
 
     def get_lr(self, initial_lr: float, step: int, max_steps: int) -> float:
         max_steps = max_steps if self.t_max is None else self.t_max
         eta_min = initial_lr * self.alpha_f
         if step < self.warmup_steps:
-            return self._linear_warmup(initial_lr, step, self.warmup_steps)
+            return self._linear_warmup(initial_lr, step, self.warmup_steps, alpha=self.alpha_0)
         elif step >= max_steps:
             return eta_min
         else:
@@ -942,12 +941,19 @@ def fix_optim_state_dict(optimizer: Optimizer, state_dict: Dict[str, Any]) -> Di
 def build_optimizer(cfg: TrainConfig, model: nn.Module) -> Optimizer:
     param_groups = get_param_groups(cfg, model)
     log.info(f"Constructing optimizer with {len(param_groups)} param groups")
+    if cfg.optimizer.decouple_weight_decay:
+        wd = cfg.optimizer.weight_decay / cfg.optimizer.learning_rate
+    else:
+        wd = cfg.optimizer.weight_decay
+    if cfg.optimizer.tie_betas:
+        cfg.optimizer.beta_1 = cfg.optimizer.beta_0
+
     if cfg.optimizer.name == OptimizerType.lionw:
         return LionW(
             param_groups,
             lr=cfg.optimizer.learning_rate,
-            betas=cfg.optimizer.betas,
-            weight_decay=cfg.optimizer.weight_decay,
+            betas=tuple([cfg.optimizer.beta_0, cfg.optimizer.beta_1]),
+            weight_decay=wd,
             record_update_metrics=cfg.optimizer.record_update_metrics,
             selective_updates=cfg.optimizer.selective_updates,
         )
@@ -955,8 +961,8 @@ def build_optimizer(cfg: TrainConfig, model: nn.Module) -> Optimizer:
         return AdamW(
             param_groups,
             lr=cfg.optimizer.learning_rate,
-            betas=cfg.optimizer.betas,
-            weight_decay=cfg.optimizer.weight_decay,
+            betas=tuple([cfg.optimizer.beta_0, cfg.optimizer.beta_1]),
+            weight_decay=wd,
             record_update_metrics=cfg.optimizer.record_update_metrics,
             selective_updates=cfg.optimizer.selective_updates,
             eps=cfg.optimizer.eps,
@@ -975,6 +981,7 @@ def build_scheduler(cfg: TrainConfig, sched_cfg: Optional[SchedulerConfig] = Non
             grad_clip_warmup_factor=sched_cfg.grad_clip_warmup_factor,
             warmup_steps=int(sched_cfg.t_warmup),
             alpha_f=sched_cfg.alpha_f,
+            alpha_0=sched_cfg.alpha_0,
             t_max=None if sched_cfg.t_max is None else int(sched_cfg.t_max),
             warmup_min_lr=sched_cfg.warmup_min_lr,
         )

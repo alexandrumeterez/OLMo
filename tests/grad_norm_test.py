@@ -76,7 +76,7 @@ def _init_torch_optim(cfg, model):
         optim_groups,
         lr=cfg.optimizer.learning_rate,
         weight_decay=cfg.optimizer.weight_decay,
-        betas=cfg.optimizer.betas,
+        betas=tuple([cfg.optimizer.beta_0, cfg.optimizer.beta_1]),
     )
 
     return optimizer
