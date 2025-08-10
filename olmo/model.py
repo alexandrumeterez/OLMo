@@ -173,6 +173,8 @@ class LayerNormBase(nn.Module):
             return LayerNorm(config, size=size, low_precision=True, **kwargs)
         elif config.layer_norm_type == LayerNormType.rms:
             return RMSLayerNorm(config, size=size, **kwargs)
+        elif config.layer_norm_type == LayerNormType.tanh:
+            return TanhNorm(config, size=size, **kwargs)
         else:
             raise NotImplementedError(f"Unknown LayerNorm type: '{config.layer_norm_type}'")
 
@@ -253,6 +255,36 @@ class RMSLayerNorm(LayerNormBase):
                 return self.weight * x
         else:
             return x
+
+class TanhNorm(LayerNormBase):
+    """
+    Tanh instead of norm, a simplified :class:`LayerNorm` implementation
+    """
+
+    def __init__(
+        self,
+        config: ModelConfig,
+        size: Optional[int] = None,
+        elementwise_affine: Optional[bool] = None,
+    ):
+        super().__init__(config, size=size, elementwise_affine=elementwise_affine)
+        self.alpha = nn.Parameter(torch.ones(1,) * config.tanh_norm_alpha, requires_grad=config.tanh_trainable_alpha)
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.autocast(enabled=False, device_type=x.device.type):
+            og_dtype = x.dtype
+            x = x.to(torch.float32)
+            x = F.tanh(self.alpha * x)
+            x = x.to(og_dtype)
+
+        if self.weight is not None:
+            if self.bias is not None:
+                return self.weight * x + self.bias
+            else:
+                return self.weight * x
+        else:
+            return x
+
 
 
 class RotaryEmbedding(nn.Module):

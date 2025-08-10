@@ -9,7 +9,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --mem=150GB		
 #SBATCH --partition=kempner_h100
-#SBATCH --array=0-0
+#SBATCH --array=0-15
 
 # Custom environment
 source ~/.bashrc

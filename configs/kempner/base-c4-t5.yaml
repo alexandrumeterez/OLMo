@@ -9,14 +9,15 @@ wandb:
   project: pretrain_stats
   group: debug
 
-max_duration: 25000 # 3.3B tokens / (256 batch * 512 context) (20x number of parameters) 
+max_duration: 12500 # 3.3B tokens / (256 batch * 1024 context) (20x number of parameters) 
 stop_at: ${max_duration}
 global_train_batch_size: 256  # 524K tokens per batch
 time_limit: 84600 # 23.5 hours in seconds
-device_train_microbatch_size: 128 # For H100 with adam
+device_train_microbatch_size: 32 # For H100 with adam
 
 device_eval_batch_size: 32
-eval_subset_num_batches: 1000 # Eval on less batches for efficiency
+# eval_subset_num_batches: 1000 # Eval on less batches for efficiency
+eval_subset_num_batches: 1 # Eval on less batches for efficiency
 
 optimizer:
   name: adamw
@@ -32,7 +33,7 @@ optimizer:
 
 scheduler:
   name: cosine_with_warmup
-  t_warmup: 2500
+  t_warmup: 1250
   alpha_0: 0.1
   alpha_f: 0.1
 
@@ -46,7 +47,7 @@ model:
   n_heads: 16
   mlp_hidden_size: 4096
   n_layers: 12
-  max_sequence_length: 512
+  max_sequence_length: 1024
   rope: true
   alibi: false
   activation_type: gelu 
@@ -111,8 +112,8 @@ save_interval: 5000
 save_num_checkpoints_to_keep: 1
 # Unsharded checkpoints (for final storage)
 save_interval_unsharded: null
-# save_count_log_scale_unsharded: 10
-save_num_unsharded_checkpoints_to_keep: 1
+save_count_log_scale_unsharded: 50
+save_num_unsharded_checkpoints_to_keep: 1000000
 
 
 speed_monitor:

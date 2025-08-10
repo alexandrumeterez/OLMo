@@ -1216,7 +1216,7 @@ class Trainer:
         save_checkpoints: bool = True
 
         with torch_profiler as p:
-            for epoch in range(self.epoch or 0, self.max_epochs):
+            for epoch in range(self.cfg.epochs):
                 for batch in self.train_loader:
                     # Bookkeeping.
                     # NOTE: To track the global batch size / number of tokens per batch we make the assumption that all
@@ -1369,7 +1369,7 @@ class Trainer:
                     self.epoch = epoch + 1
                     self.global_train_examples_seen_this_epoch = 0
                     self.dataset.start_index = 0
-                    if self.epoch < self.max_epochs:
+                    if self.epoch < self.cfg.epochs:
                         log.info(f"Reshuffling data loader for epoch {self.epoch}...")
                         self.dataset.reshuffle(self.epoch)
                     continue

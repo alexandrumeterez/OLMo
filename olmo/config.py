@@ -193,6 +193,10 @@ class LayerNormType(StrEnum):
     probably the fastest implementation.
     """
 
+    tanh = "tanh"
+    """
+    Uses tanh instead of LN.
+    """
 
 class ActivationType(StrEnum):
     gelu = "gelu"
@@ -381,6 +385,9 @@ class ModelConfig(BaseConfig):
     """
 
     layer_norm_eps: float = 1e-05
+
+    tanh_norm_alpha: float = 1.0
+    tanh_trainable_alpha: bool = False
 
     attention_layer_norm_with_affine: bool = True
     """
@@ -967,7 +974,7 @@ class TrainConfig(BaseConfig):
     """
     OLMo training configuration.
     """
-
+    epochs: int = 1
     run_name: Optional[str] = None
     """
     The name of the run.

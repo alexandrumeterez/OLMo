@@ -1,5 +1,8 @@
 # build artifacts
-
+*.zip
+*.pdf
+*.pt
+*.png
 .eggs/
 .mypy_cache
 *.egg-info/

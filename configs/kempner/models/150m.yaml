@@ -1,6 +1,4 @@
-max_duration: 25000 # 3.3B tokens / (256 batch * 512 context) (20x number of parameters) 
-
-device_train_microbatch_size: 128 # For H100 with adam
+device_train_microbatch_size: 32 # For H100 with adam
 
 model:
   # 150m non-embedding params and 216m total params
