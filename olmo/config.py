@@ -975,6 +975,7 @@ class TrainConfig(BaseConfig):
     OLMo training configuration.
     """
     epochs: int = 1
+    num_passes: int = 1
     run_name: Optional[str] = None
     """
     The name of the run.

@@ -9,7 +9,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --mem=150GB		
 #SBATCH --partition=kempner_h100
-#SBATCH --array=0-15
+#SBATCH --array=0-0
 
 # Custom environment
 source ~/.bashrc
@@ -17,8 +17,8 @@ conda deactivate
 conda activate olmo
 
 export CONFIG=configs/kempner/base-c4-t5.yaml+configs/kempner/models/150m.yaml
-export SWEEP_CONFIG=configs/kempner/sweeps/adam.yaml
-export CHECKPOINTS_PATH=/n/netscratch/kempner_sham_lab/Everyone/ameterez/150m_1_chinchilla_1_repeat
+export SWEEP_CONFIG=configs/kempner/sweeps/debug.yaml
+export CHECKPOINTS_PATH=/n/netscratch/kempner_sham_lab/Everyone/ameterez/pretrain_stats
 
 # Boilerplate environment variables
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}

@@ -261,11 +261,11 @@ class Trainer:
     @property
     def max_steps(self) -> int:
         if isinstance(self.cfg.max_duration, int):
-            return self.cfg.max_duration
+            return self.cfg.max_duration * self.cfg.num_passes
         elif isinstance(self.cfg.max_duration, str):
             if self.cfg.max_duration.endswith("T"):
                 # convert to float *first* to handle scientific notation
-                max_tokens = int(float(self.cfg.max_duration[:-1].strip()))
+                max_tokens = int(float(self.cfg.max_duration[:-1].strip())) *  self.cfg.num_passes
                 tokens_remaining = max(max_tokens - self.global_train_tokens_seen, 0)
                 steps_remaining = math.ceil(tokens_remaining / self.tokens_per_batch)
                 return self.global_step + steps_remaining
@@ -274,7 +274,7 @@ class Trainer:
                 return max_epochs * self.batches_per_epoch
             else:
                 # convert to float *first* to handle scientific notation
-                return int(float(self.cfg.max_duration))
+                return int(float(self.cfg.max_duration) * self.cfg.num_passes )
         else:
             raise TypeError(f"expected int or str for 'max_duration', found {type(self.cfg.max_duration)}")
 
@@ -284,11 +284,11 @@ class Trainer:
             return (
                 self.global_train_tokens_seen
                 + max(self.cfg.max_duration - self.global_step, 0) * self.tokens_per_batch
-            )
+            ) *  self.cfg.num_passes
         elif isinstance(self.cfg.max_duration, str):
             if self.cfg.max_duration.endswith("T"):
                 # convert to float *first* to handle scientific notation
-                return int(float(self.cfg.max_duration[:-1].strip()))
+                return int(float(self.cfg.max_duration[:-1].strip())  * self.cfg.num_passes)
             elif self.cfg.max_duration.endswith("ep"):
                 max_epochs = int(self.cfg.max_duration[:-2].strip())
                 return max_epochs * self.batches_per_epoch * self.tokens_per_batch
@@ -1009,6 +1009,7 @@ class Trainer:
             return False
 
     def should_eval_this_step(self) -> bool:
+        return False
         assert self.cfg.eval_interval is not None or self.cfg.eval_count_log_scale is not None
         if self.cfg.eval_interval is not None:
             return self.global_step % self.cfg.eval_interval == 0
@@ -1020,6 +1021,7 @@ class Trainer:
 
 
     def should_save_unsharded_this_step(self) -> bool:
+        return False
         if self.cfg.save_interval_unsharded is not None:
             return self.global_step % self.cfg.save_interval_unsharded == 0
         if self.cfg.save_count_log_scale_unsharded is not None:
@@ -1134,8 +1136,10 @@ class Trainer:
                 self.cfg.stop_at = self.global_step + self.cfg.stop_after
             else:
                 self.cfg.stop_at = min(self.cfg.stop_at, self.global_step + self.cfg.stop_after)
-        if self.cfg.stop_at is None:
-            self.cfg.stop_at = self.max_steps + 10
+        else:
+            self.cfg.stop_at = self.max_tokens
+        # if self.cfg.stop_at is None:
+        #     self.cfg.stop_at = self.max_steps + 10
 
         self._start_time = time.time()
         self._gc_init_state = gc.isenabled()  # cache if garbage collection is enabled, reset on close.
@@ -1217,7 +1221,11 @@ class Trainer:
 
         with torch_profiler as p:
             for epoch in range(self.cfg.epochs):
+                print("EPOCH LOOP", flush=True)
                 for batch in self.train_loader:
+                    print("BATCH LOOP", flush=True)
+                    if self.global_train_tokens_seen >= self.max_tokens: 
+                        break
                     # Bookkeeping.
                     # NOTE: To track the global batch size / number of tokens per batch we make the assumption that all
                     # batches see the same number of tokens, which should be the case for language model pre-training
@@ -1226,6 +1234,7 @@ class Trainer:
                     # overhead. So for now I'm putting these assertions here so if the assumption is violated it will
                     # fail loudly.
                     batch_size, seq_len = batch["input_ids"].shape
+                    print(batch['input_ids'][:5], flush=True)
                     assert seq_len == self.cfg.model.max_sequence_length
                     assert batch_size == self.cfg.device_train_batch_size
                     global_batch_size = batch_size * get_world_size()  # assumes batch size equal across ranks
@@ -1364,17 +1373,14 @@ class Trainer:
                             python_profiler.disable()
                             python_profiler.print_stats(sort=SortKey.CUMULATIVE)
                             python_profiler = None
-                else:
-                    log.info("Training epoch complete")
-                    self.epoch = epoch + 1
-                    self.global_train_examples_seen_this_epoch = 0
-                    self.dataset.start_index = 0
-                    if self.epoch < self.cfg.epochs:
-                        log.info(f"Reshuffling data loader for epoch {self.epoch}...")
-                        self.dataset.reshuffle(self.epoch)
-                    continue
-
-                break
+                
+                log.info("Training epoch complete")
+                # self.epoch = epoch + 1
+                # self.global_train_examples_seen_this_epoch = 0
+                # self.dataset.start_index = 0
+                # if self.epoch < self.cfg.epochs:
+                    # log.info(f"Reshuffling data loader for epoch {self.epoch}...")
+                    # self.dataset.reshuffle(self.epoch)
 
         # Save final checkpoint.
         if save_checkpoints:

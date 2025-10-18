@@ -153,6 +153,7 @@ def build_train_dataloader(
             )
         else:
             work_dir.mkdir(exist_ok=True, parents=True)
+    max_examples = train_config.max_duration if type(train_config.max_duration) == int else int(float(train_config.max_duration[:-1]))
     dataset = IterableDataset(
         dataset,  # type: ignore
         train_config.global_train_batch_size,
@@ -164,6 +165,8 @@ def build_train_dataloader(
         rank=rank,
         fs_local_rank=fs_local_rank,
         work_dir=work_dir,
+        max_examples=max_examples,
+        num_passes=train_config.num_passes
     )
     barrier()
     out = DataLoader(
